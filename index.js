@@ -1,18 +1,18 @@
 const express = require('express');
 const cors = require('cors');
-const mysql = require('./mysql');
 const news = require('./app/news');
+const mysql = require('./mysql');
 const comments = require('./app/comments');
 
 const app = express();
-const port = 7000;
+const port = 8000;
 
 app.use(express.json());
 app.use(express.static('public'));
 app.use(cors());
 
 app.use('/news', news);
-app.use('/comments', comments);
+app.use('/comments',comments);
 
 const run = async () => {
     await mysql.connect();

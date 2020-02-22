@@ -8,6 +8,6 @@ module.exports = {
         host     : 'localhost',
         user     : 'baha',
         password : '112233',
-        database : 'study_db'
+        database : 'exam_db'
     },
 };
