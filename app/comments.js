@@ -1,38 +1,63 @@
 const express = require('express');
-const mysql = require('../mysql');
 
-const router = express.Router();
+const createRouter = connection => {
+    const router = express.Router();
 
-router.get('/comments', async (req,res) => {
-	const items = await mysql.getConnection().query('SELECT `name`, `id` FROM `categories`');
-	res.send(items);
-});
-// router.get('/:id', async (req,res) => {
-// 	const item = await mysql.getConnection().query('SELECT * FROM `categories` WHERE `id` = ?', req.params.id);
-// 	if (!item[0]){
-// 		res.send({message : "not found"});
-// 	}
-// 	res.send(item[0]);
-// });
-router.post('/comments', async (req,res) => {
-	const message = req.body;
-	if (message.name){
-		const result = await mysql.getConnection().query(
-			'INSERT INTO `categories` (`name`,`description`) VALUES ' +
-			'(?,?)',
-			[message.name,message.description]);
-		res.send({id : result.insertId,...message});
-	}
-	res.send({message : "fill all required fields"});
-});
-router.delete('/comments/:id', async (req,res) => {
-	try{
-		await mysql.getConnection().query(
-			'DELETE FROM `categories` WHERE `id` = ?',req.params.id
-		);
-		res.send({message : 'OK'});
-	} catch (e) {
-		res.send({message : e});
-	}
-});
-module.exports = router;
+    router.get('/', (req, res) => {
+        connection.query('SELECT * FROM `comments`', (error, results) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+            res.send(results);
+        });
+    });
+
+    router.get('/:id', (req, res) => {
+        connection.query('SELECT * FROM `comments` WHERE `news_id` = ?', req.params.id, (error, results) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+
+            if (results) {
+                res.send(results);
+            } else {
+                res.status(404).send({error: 'Comment not found'});
+            }
+        });
+    });
+
+    router.post('/', (req, res) => {
+        const comment = req.body;
+
+        if (!comment.message) {
+            res.status(400).send('Missing required fields, please check');
+        } else {
+            if (!comment.author) {
+                comment.author = 'Anonymous';
+            }
+            connection.query('INSERT INTO `comments` (`news_id`, `author`, `message`) VALUES (?, ?, ?)',
+                [comment.news_id, comment.author, comment.message],
+                (error) => {
+                    if (error) {
+                        res.status(500).send({error: 'Database error'});
+                    }
+                    res.send({message: 'OK'});
+                }
+            );
+        }
+    });
+
+    router.delete('/:id', (req, res) => {
+        connection.query('DELETE FROM `comments` WHERE `id` = ?', req.params.id, (error) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+
+            res.send({message: 'OK'});
+        });
+    });
+
+    return router;
+};
+
+module.exports = createRouter;

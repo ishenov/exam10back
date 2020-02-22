@@ -1,59 +1,80 @@
 const express = require('express');
-const mysql = require('../mysql');
-const multer  = require('multer');
-const path = require('path');
-const config = require('../config');
+const multer = require('multer');
 const nanoid = require('nanoid');
 
-
+const path = require('path');
+const config = require('../config');
 
 const storage = multer.diskStorage({
-	destination(req, file, cb) {
-		cb(null, config.uploadPath);
-	},
-	filename(req, file, cb) {
-		cb(null, nanoid() + path.extname(file.originalname));
-	}
+    destination: (req, file, cb) => {
+        cb(null, config.uploadPath);
+    },
+    filename: (req, file, cb) => {
+        cb(null, nanoid() + path.extname(file.originalname));
+    }
 });
-const router = express.Router();
+
 const upload = multer({storage});
 
-router.get('/news', async (req, res) => {
-	const news = await mysql.getConnection().query('SELECT `title`, `news_id`, `image`, `datetime` FROM `news`');
-	res.send(news);
-});
+const createRouter = connection => {
+    const router = express.Router();
 
-router.get('/news/:id', async (req, res) => {
-	const news = await mysql.getConnection().query('SELECT * FROM `news` WHERE `id` = ?', req.params.id);
-	if (!news[0]){
-		res.send({message : "not found"});
-	}
-	res.send(news[0]);
-});
+    router.get('/', (req, res) => {
+        connection.query('SELECT * FROM `news`', (error, results) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+            res.send(results);
+        });
+    });
 
-router.post('/news', upload.single('image'), async (req, res) => {
-	const message = req.body;
-	if (req.file) {
-		message.image = req.file.filename;
-	}
-	if (message.title && message.newsId && message.content){
-		const date = Date.now().toString();
-		const result = await mysql.getConnection().query(
-			'INSERT INTO `news` (`title`, `news_id`, `image`, `datetime`, `content`) VALUES ' +
-			'(?,?,?,?,?)',
-			[message.title,message.newsId,message.image,date,message.content]);
-		res.send({id : result.insertId,...message});
-	}
-	res.send({message : "fill all required fields"});
-});
-router.delete('/news/:id', async (req,res) => {
-	try{
-		await mysql.getConnection().query(
-			'DELETE FROM `news` WHERE `id` = ?',req.params.id
-		);
-		res.send({message : 'OK'});
-	} catch (e) {
-		res.send({message : e});
-	}
-});
-module.exports = router;
+    router.get('/:id', (req, res) => {
+        connection.query('SELECT * FROM `news` WHERE `id` = ?', req.params.id, (error, results) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+            if (results[0]) {
+                res.send(results[0]);
+            } else {
+                res.status(404).send({error: 'News not found'});
+            }
+        });
+    });
+
+    router.post('/', upload.single('image'), (req, res) => {
+        const news = req.body;
+
+        if (!news.title || !news.description) {
+            res.status(400).send('Missing required fields, please check');
+        } else {
+
+            if (req.file) {
+                news.image = req.file.filename;
+            }
+
+            news.datetime = new Date().toISOString();
+
+            connection.query('INSERT INTO `news` (`title`, `description`, `datetime`, `image`) VALUES (?, ?, ?, ?)',
+                [news.title, news.description, news.datetime, news.image],
+                (error) => {
+                    if (error) {
+                        res.status(500).send({error: 'Database error'});
+                    }
+                    res.send({message: 'OK'});
+                }
+            );
+        }
+    });
+
+    router.delete('/:id', (req, res) => {
+        connection.query('DELETE FROM `news` WHERE `id` = ?', req.params.id, (error) => {
+            if (error) {
+                res.status(500).send({error: 'Database error'});
+            }
+            res.send({message: 'OK'});
+        });
+    });
+    return router;
+};
+
+module.exports = createRouter;
